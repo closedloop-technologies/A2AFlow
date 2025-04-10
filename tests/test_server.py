@@ -20,6 +20,15 @@ from a2aflow.models import (
     AgentSkill,
 )
 
+import pytest
+from fastapi.testclient import TestClient
+from pydantic import BaseModel
+from datetime import datetime
+
+from a2aflow.server import A2AServer
+from a2aflow.core import Flow
+from a2aflow.tasks import TaskStatus, TaskNotFoundError, TaskNotCancelableError
+
 
 class TNode(A2ANode):  # Test Node
     """A simple node for testing the server."""
@@ -263,3 +272,218 @@ async def test_task_manager():
     # This is a more complex test that requires mocking the flow execution
     # In a real test suite, you would mock the flow and verify task management
     pass
+
+
+class MockFlow(Flow):
+    def __init__(self):
+        super().__init__(start="test_start")
+        self.shared = {}
+        self.capabilities = ["text"]
+        self.skills = ["test_skill"]
+
+    def run(self, shared: dict):
+        self.shared = shared
+        if "error" in shared.get("query", ""):
+            raise ValueError("Simulated error")
+        if "input_required" in shared.get("query", ""):
+            self.shared["a2a_required_input"] = True
+        else:
+            self.shared["a2a_output_parts"] = [
+                {"type": "text", "text": "Test response"}
+            ]
+            self.shared["a2a_output_artifacts"] = [
+                {"type": "file", "url": "test://file.txt"}
+            ]
+
+
+@pytest.fixture
+def test_server():
+    flow = MockFlow()
+    server = A2AServer(flow)
+    return server
+
+
+def test_send_task(test_server):
+    client = TestClient(test_server._app)
+
+    # Valid task request
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/send",
+            "params": {"sessionId": "test_session", "query": "Test query"},
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "result" in result
+    task = result["result"]
+    assert task["status"] == "completed"
+    assert len(task["parts"]) > 0
+    assert len(task["artifacts"]) > 0
+
+
+def test_send_task_input_required(test_server):
+    client = TestClient(test_server._app)
+
+    # Task requiring input
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/send",
+            "params": {"sessionId": "test_session", "query": "input_required"},
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "result" in result
+    task = result["result"]
+    assert task["status"] == "input-required"
+
+
+def test_send_task_error(test_server):
+    client = TestClient(test_server._app)
+
+    # Task with error
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/send",
+            "params": {"sessionId": "test_session", "query": "error"},
+        },
+    )
+
+    assert response.status_code == 500
+    result = response.json()
+    assert "error" in result
+    assert result["error"]["code"] == -32603
+
+
+def test_get_task(test_server):
+    client = TestClient(test_server._app)
+
+    # Create a task
+    create_response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/send",
+            "params": {"sessionId": "test_session", "query": "Test query"},
+        },
+    )
+
+    task_id = create_response.json()["result"]["id"]
+
+    # Get the task
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tasks/get",
+            "params": {"task_id": task_id},
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "result" in result
+    task = result["result"]
+    assert task["id"] == task_id
+
+
+def test_get_task_not_found(test_server):
+    client = TestClient(test_server._app)
+
+    # Try to get non-existent task
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/get",
+            "params": {"task_id": "nonexistent_task"},
+        },
+    )
+
+    assert response.status_code == 404
+    result = response.json()
+    assert "error" in result
+    assert result["error"]["code"] == -32001
+
+
+def test_cancel_task(test_server):
+    client = TestClient(test_server._app)
+
+    # Create a task
+    create_response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/send",
+            "params": {"sessionId": "test_session", "query": "Test query"},
+        },
+    )
+
+    task_id = create_response.json()["result"]["id"]
+
+    # Cancel the task
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tasks/cancel",
+            "params": {"task_id": task_id},
+        },
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert "result" in result
+    task = result["result"]
+    assert task["id"] == task_id
+    assert task["status"] == "canceled"
+
+
+def test_cancel_task_completed(test_server):
+    client = TestClient(test_server._app)
+
+    # Create a completed task
+    create_response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tasks/send",
+            "params": {"sessionId": "test_session", "query": "Test query"},
+        },
+    )
+
+    task_id = create_response.json()["result"]["id"]
+
+    # Try to cancel completed task
+    response = client.post(
+        "/",
+        json={
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tasks/cancel",
+            "params": {"task_id": task_id},
+        },
+    )
+
+    assert response.status_code == 400
+    result = response.json()
+    assert "error" in result
+    assert result["error"]["code"] == -32002
