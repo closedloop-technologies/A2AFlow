@@ -1,0 +1,85 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "a2aflow"
+version = "0.1.0"
+description = "A lightweight bridge between PocketFlow and the Agent2Agent protocol"
+readme = "README.md"
+requires-python = ">=3.9"
+license = { file = "LICENSE" }
+authors = [{ name = "Sean Kruzel", email = "sean@closedloop.tech" }]
+keywords = ["agent", "llm", "a2a", "pocketflow", "agent2agent"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = [
+    "fastapi>=0.115.12",
+    "httpx>=0.28.1",
+    "httpx-sse>=0.4.0",
+    "pocketflow>=0.0.1",
+    "pydantic>=2.11.3",
+    "pyjwt>=2.10.1",
+    "requests>=2.32.3",
+    "starlette>=0.46.1",
+    "uvicorn>=0.34.0",
+]
+
+[dependency-groups]
+dev = [
+    "black",
+    "isort",
+    "mypy",
+    "ruff",
+    "pytest>=7.4.0",
+    "pytest-asyncio>=0.21.1",
+]
+docs = [
+    "mkdocs>=1.5.3",
+    "mkdocs-material>=9.4.6",
+    "mkdocstrings>=0.23.0",
+    "mkdocstrings-python>=1.7.3",
+]
+
+[project.urls]
+"Homepage" = "https://github.com/your-username/A2AFlow"
+"Bug Tracker" = "https://github.com/your-username/A2AFlow/issues"
+"Documentation" = "https://your-username.github.io/A2AFlow"
+
+[tool.hatch.build.targets.wheel]
+packages = ["a2aflow"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]
+
+[tool.isort]
+profile = "black"
+line_length = 88
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[tool.ruff]
+line-length = 88
+target-version = "py39"
+select = ["E", "F", "B", "I"]
+ignore = []
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = "test_*.py"
+asyncio_mode = "auto"
