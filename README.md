@@ -38,7 +38,7 @@ A2AFlow combines the minimalist approach of [PocketFlow](https://github.com/The-
 pip install uv
 
 # Install A2AFlow
-uv pip install a2aflow
+uv sync
 ```
 
 ### Using Pip
@@ -57,7 +57,7 @@ cd A2AFlow
 # Using UV (recommended)
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
-uv pip install -e ".[dev,docs]"
+uv sync --group dev --group docs
 
 # Using Pip
 python -m venv .venv
@@ -213,8 +213,8 @@ cd A2AFlow
 uv venv
 source .venv/bin/activate  # On Windows: .venv\Scripts\activate
 
-# Install in development mode with development dependencies
-uv pip install -e ".[dev,docs]"
+# Install dependencies including development and documentation groups
+uv sync --group dev --group docs
 
 # Run tests
 pytest

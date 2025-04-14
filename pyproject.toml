@@ -31,10 +31,12 @@ dependencies = [
     "pyjwt>=2.10.1",
     "requests>=2.32.3",
     "starlette>=0.46.1",
+    "twine>=6.1.0",
     "uvicorn>=0.34.0",
 ]
 
 [dependency-groups]
+# Install dependency groups using: uv sync --group dev --group docs
 dev = [
     "black",
     "isort",
