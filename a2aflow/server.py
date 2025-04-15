@@ -3,9 +3,11 @@ A2A Server implementation for PocketFlow
 """
 
 from fastapi import FastAPI, Request, Response
+from fastapi.responses import JSONResponse
 from uvicorn import run as uvicorn_run
 from typing import Dict, Any, Optional, List
 from datetime import datetime
+import json
 from pydantic import BaseModel
 
 from .tasks import (
@@ -46,7 +48,7 @@ class A2AServer:
 
         @self._app.get("/.well-known/agent.json")
         def get_agent_card():
-            return Response(content=self.agent_card, media_type="application/json")
+            return JSONResponse(content=self.agent_card)
 
         @self._app.post("/")
         async def handle_request(request: Request):
@@ -56,13 +58,12 @@ class A2AServer:
                 # Validate A2A request
                 method = body.get("method")
                 if not method:
-                    return Response(
+                    return JSONResponse(
                         content={
                             "jsonrpc": "2.0",
                             "id": body.get("id"),
                             "error": {"code": -32600, "message": "Invalid request"},
                         },
-                        media_type="application/json",
                         status_code=400,
                     )
 
@@ -73,24 +74,22 @@ class A2AServer:
                 elif method == "tasks/cancel":
                     return await self._handle_cancel_task(body)
                 else:
-                    return Response(
+                    return JSONResponse(
                         content={
                             "jsonrpc": "2.0",
                             "id": body.get("id"),
                             "error": {"code": -32601, "message": "Method not found"},
                         },
-                        media_type="application/json",
                         status_code=404,
                     )
             except Exception as e:
                 # Handle error according to A2A spec
-                return Response(
+                return JSONResponse(
                     content={
                         "jsonrpc": "2.0",
-                        "id": body.get("id"),
+                        "id": body.get("id") if isinstance(body, dict) else None,
                         "error": {"code": -32603, "message": str(e)},
                     },
-                    media_type="application/json",
                     status_code=500,
                 )
 
@@ -105,22 +104,21 @@ class A2AServer:
             # Process through task manager
             response = await self.task_manager.on_send_task(send_task_request)
             
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
-                    "result": response.result.dict(),
+                    "result": response.result.model_dump(),
                 },
-                media_type="application/json",
+                status_code=200,
             )
         except Exception as e:
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
                     "error": {"code": -32603, "message": str(e)},
                 },
-                media_type="application/json",
                 status_code=500,
             )
 
@@ -129,43 +127,40 @@ class A2AServer:
         try:
             task_id = request["params"].get("task_id")
             if not task_id:
-                return Response(
+                return JSONResponse(
                     content={
                         "jsonrpc": "2.0",
                         "id": request.get("id"),
                         "error": {"code": -32602, "message": "Invalid params"},
                     },
-                    media_type="application/json",
                     status_code=400,
                 )
 
             task = await self.task_manager.on_get_task(task_id)
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
-                    "result": task.dict(),
+                    "result": task.model_dump(),
                 },
-                media_type="application/json",
+                status_code=200,
             )
         except TaskNotFoundError as e:
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
                     "error": {"code": e.code, "message": e.message},
                 },
-                media_type="application/json",
                 status_code=404,
             )
         except Exception as e:
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
                     "error": {"code": -32603, "message": str(e)},
                 },
-                media_type="application/json",
                 status_code=500,
             )
 
@@ -174,52 +169,48 @@ class A2AServer:
         try:
             task_id = request["params"].get("task_id")
             if not task_id:
-                return Response(
+                return JSONResponse(
                     content={
                         "jsonrpc": "2.0",
                         "id": request.get("id"),
                         "error": {"code": -32602, "message": "Invalid params"},
                     },
-                    media_type="application/json",
                     status_code=400,
                 )
 
             task = await self.task_manager.on_cancel_task(task_id)
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
-                    "result": task.dict(),
+                    "result": task.model_dump(),
                 },
-                media_type="application/json",
+                status_code=200,
             )
         except TaskNotFoundError as e:
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
                     "error": {"code": e.code, "message": e.message},
                 },
-                media_type="application/json",
                 status_code=404,
             )
         except TaskNotCancelableError as e:
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
                     "error": {"code": e.code, "message": e.message},
                 },
-                media_type="application/json",
                 status_code=400,
             )
         except Exception as e:
-            return Response(
+            return JSONResponse(
                 content={
                     "jsonrpc": "2.0",
                     "id": request.get("id"),
                     "error": {"code": -32603, "message": str(e)},
                 },
-                media_type="application/json",
                 status_code=500,
             )
